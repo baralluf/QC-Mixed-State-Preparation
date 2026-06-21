@@ -1,0 +1,98 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath, amssymb, physics, geometry}
+\geometry{letterpaper, margin=1in}
+
+\title{Theory and Project Description: Mixed Quantum State Preparation}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Project Description}
+
+\textbf{Objective:} Write a Qiskit function that takes a $2^n \times 2^n$ density matrix, $\rho \in \mathbb{C}^{2^n \times 2^n}$, and outputs a circuit, $U$ (with measurements), that prepares $\rho$.
+
+\noindent \textbf{Allowed Operations:} The construction may use any number of ancillas, arbitrary 1-qubit gates, and multiplexed Z-rotations (the number of controls may be arbitrarily large).
+
+\noindent \textbf{Expectations:}
+\begin{itemize}
+    \item Documentation.
+    \item Working Qiskit code for all $n$ and a demonstration for $n=2$.
+\end{itemize}
+
+\section{Theoretical Background}
+
+\subsection{Density Matrices and Statistical Ensembles}
+In standard quantum mechanics, a perfectly isolated system is described by a pure state vector $|\psi\rangle$. However, real physical systems frequently interact with their environments or are prepared using processes that introduce classical uncertainty. To capture this statistical mixture of pure states, we must use the density matrix formalism.
+
+If a quantum system is prepared in a state $|\psi_i\rangle$ with a classical probability $p_i$, its density matrix $\rho$ is defined as:
+\begin{equation}
+    \rho = \sum_{i} p_i |\psi_i\rangle \langle \psi_i|
+\end{equation}
+where $p_i \geq 0$ and $\sum_i p_i = 1$. It is crucial to note that the component states $\{|\psi_i\rangle\}$ do not necessarily form an orthogonal basis.
+
+For an $n$-qubit system, $\rho$ is a $2^n \times 2^n$ complex matrix. To represent a valid physical ensemble, $\rho$ must satisfy three foundational properties:
+\begin{enumerate}
+    \item \textbf{Hermitian:} $\rho = \rho^\dagger$. This property guarantees that the expectation values of physical observables are strictly real numbers. For any observable $A$, its expectation value is calculated as $\langle A \rangle = \text{Tr}(\rho A)$.
+    \item \textbf{Positive Semi-Definite:} $\langle \phi | \rho | \phi \rangle \geq 0$ for all arbitrary states $|\phi\rangle$. This ensures that the physical probability of measuring the system in any given state is always non-negative.
+    \item \textbf{Unit Trace:} $\text{Tr}(\rho) = 1$. This represents the conservation of probability. The sum of the probabilities of all mutually exclusive measurement outcomes must equal exactly $1$.
+\end{enumerate}
+
+Furthermore, the density matrix provides a straightforward mathematical test to determine if a system is pure or mixed by calculating its purity, defined as $\text{Tr}(\rho^2)$. For a completely pure state, $\text{Tr}(\rho^2) = 1$. For a genuinely mixed state, $\text{Tr}(\rho^2) < 1$.
+
+\subsection{Spectral Decomposition and Ensemble Ambiguity}
+Because the density matrix $\rho$ is both Hermitian and positive semi-definite, the spectral theorem guarantees that it can be exactly diagonalized. The spectral decomposition of $\rho$ is expressed as:
+\begin{equation}
+    \rho = \sum_{i=0}^{2^n-1} p_i |\psi_i\rangle \langle \psi_i|
+\end{equation}
+where $p_i$ are the non-negative real eigenvalues ($\sum_i p_i = 1$) and $|\psi_i\rangle$ are the corresponding orthonormal eigenvectors.
+
+From a physical standpoint, this decomposition addresses the phenomenon of ensemble ambiguity. A quantum system might be initially prepared by mixing non-orthogonal states, which cannot be perfectly distinguished by any measurement. However, the spectral decomposition demonstrates that any density matrix can be equivalently interpreted as a statistical mixture of perfectly distinguishable, orthogonal pure states. The quantum state preparation algorithm strictly relies on this orthogonal basis to map probability amplitudes.
+
+\subsection{State Purification and the Partial Trace}
+Quantum computing frameworks rely on closed-system dynamics. Because quantum circuits operate via unitary transformations ($U U^\dagger = I$), they evolve systems deterministically. Consequently, a quantum circuit initialized in a pure state (such as $|0\rangle^{\otimes n}$) will strictly output another pure state. We cannot natively generate a mixed state $\rho$ using solely unitary gates acting on the target system.
+
+To circumvent this limitation, we utilize a mathematical technique formally known as state purification. According to the purification theorem, any mixed state $\rho_S$ acting on a primary system $S$ can be viewed as the reduced density matrix of a pure state $|\Psi\rangle$ on a composite system $S \otimes A$, where $A$ is an auxiliary reference, or ancilla (a disposable qubit) system.
+
+Given the spectral decomposition $\rho_S = \sum_{i} p_i |\psi_i\rangle_S \langle \psi_i|_S$, we construct the purified entangled state as:
+\begin{equation}
+    |\Psi\rangle_{SA} = \sum_{i} \sqrt{p_i} |\psi_i\rangle_S \otimes |i\rangle_A
+\end{equation}
+where $|i\rangle_A$ forms an arbitrary orthonormal computational basis for the ancilla register.
+
+To recover the target mixed state for our main system $S$, we apply the partial trace over the ancilla system $A$:
+\begin{equation}
+    \text{Tr}_A(|\Psi\rangle_{SA} \langle\Psi|_{SA}) = \sum_{i} p_i |\psi_i\rangle_S \langle \psi_i|_S = \rho_S
+\end{equation}
+Physically, taking the partial trace corresponds to deliberately ignoring the ancilla subsystem. In the context of our quantum circuit, we measure the ancilla register and discard the classical readout. This intentional loss of information effectively collapses the system $S$ into the exact statistical mixture described by $\rho_S$.
+
+\subsection{Circuit Implementation Strategy}
+Preparing this purified state within a quantum circuit requires a sequential, two-step unitary operation followed by a non-unitary measurement step. We break this down as follows:
+\\ \\
+\textbf{1. Ancilla Preperation}
+We begin by initializing a register of $n$ ancilla qubits in the ground state $|0\rangle^{\otimes n}_A$. We then apply a unitary state preparation operator, $U_{\text{anc}}$, designed to create a superposition where the probability amplitudes correspond exactly to the square roots of our target eigenvalues:
+$$
+    U_{\text{anc}} |0\rangle^{\otimes n}_A = \sum_{i=0}^{2^n-1} \sqrt{p_i} |i\rangle_A
+$$
+Because the eigenvalues $p_i$ are strictly real and non-negative, this step does not require complex phase mappings. Instead, it involves synthesizing a state preparation circuit utilizing arbitrary 1-qubit gates and multiplexed Z-rotations. These gates systematically divide the probability amplitudes across the computational basis states $|i\rangle_A$ of the ancilla register, successfully embedding the classical probability distribution into the quantum system.
+\\ \\
+\textbf{2. Entangling the System Qubits:}
+Next, we initialize the main system register with $n$ qubits in the state $|0\rangle^{\otimes n}_S$. To construct the required purified state, we must map the system register to the specific eigenvector $|\psi_i\rangle_S$ strictly conditioned on the ancilla register being in the corresponding state $|i\rangle_A$.
+
+We achieve this by applying a highly controlled unitary block, $U_{\text{ent}}$. Mathematically, this block is a sum of conditionally applied unitaries $V_i$, where each $V_i$ is defined by $V_i|0\rangle^{\otimes n}_S = |\psi_i\rangle_S$:
+$$
+    U_{\text{ent}} = \sum_{i=0}^{2^n-1} |i\rangle \langle i|_A \otimes V_i
+$$
+Applying $U_{\text{ent}}$ to the combined system yields the fully entangled state:
+$$
+    U_{\text{ent}} \left( \sum_{i=0}^{2^n-1} \sqrt{p_i} |i\rangle_A \otimes |0\rangle^{\otimes n}_S \right) = \sum_{i=0}^{2^n-1} \sqrt{p_i} |i\rangle_A \otimes |\psi_i\rangle_S
+$$
+In practice, because the target vectors $|\psi_i\rangle$ are known from the classical eigendecomposition of the input matrix, $U_{\text{ent}}$ is synthesized as a multiplexed state preparation block. We iterate through each non-zero eigenvalue, applying Pauli-X gates to the ancilla to explicitly isolate the control state $|i\rangle_A$, executing the controlled state preparation on the system, and then uncomputing the X gates to restore the ancilla.
+\\ \\
+\textbf{3. The Partial Trace via Measurement}
+After the unitary steps are executed, the combined system is in the pure state $|\Psi\rangle_{SA}$. To isolate the main system $S$ into the target mixed state $\rho$, we must execute the partial trace over the ancilla $A$.
+
+Physically, this is realized by measuring all $n$ ancilla qubits into a classical register and intentionally discarding the classical readout. By ignoring the measurement outcomes, we trace out the ancilla degrees of freedom. The system register $S$ is left in a statistical mixture of the pure states $|\psi_i\rangle_S$ weighted precisely by the classical probabilities $p_i$, thereby outputting the exact target density matrix $\rho$.
+
+\end{document}
